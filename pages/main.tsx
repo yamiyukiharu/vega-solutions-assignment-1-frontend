@@ -16,7 +16,7 @@ import {
 } from "antd";
 import type { RangePickerProps } from 'antd/es/date-picker';
 import React, { useState } from "react";
-import DataTable from "./table";
+import DataTable from "./DataTable";
 
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
