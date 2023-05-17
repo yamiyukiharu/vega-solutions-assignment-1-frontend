@@ -1,6 +1,6 @@
 import Head from "next/head";
 import Main from "./main";
-import Title from "antd/es/typography/Title";
+import Title from "antd/lib/typography/Title";
 
 export default function Home() {
   return (
