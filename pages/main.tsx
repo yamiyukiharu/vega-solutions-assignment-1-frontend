@@ -32,6 +32,7 @@ const Main: React.FC = () => {
   const [isDefaultQuery, setIsDefaultQuery] = useState(true);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
+  const [ethPrice, setEthPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
@@ -80,7 +81,25 @@ const Main: React.FC = () => {
         setData(formattedData);
       })
       .catch((error) => console.error(error));
+
+    fetch(
+      process.env.NEXT_PUBLIC_API_URL +
+        "exchange-rate?from=eth&to=usdt",
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    )
+      .then((response) => response.json())
+      .then((data: number) => {
+        setEthPrice(data);
+      })
+      .catch((error) => console.error(error));
   }, []);
+
+
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -139,7 +158,7 @@ const Main: React.FC = () => {
           <Paragraph>{totalUsdtFees}</Paragraph>
         </Form.Item>
         <Form.Item label="Current ETH/USDT price">
-          <Paragraph>0</Paragraph>
+          <Paragraph>{ethPrice}</Paragraph>
         </Form.Item>
       </Form>
 
