@@ -6,9 +6,11 @@ import Table, { ColumnsType, TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
 import { useTransactions } from "./hooks/useTransactions";
 import BigNumber from "bignumber.js";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useExchangeRate } from "./hooks/useExchangeRate";
 import dayjs from "dayjs";
+import { ReportDataDto, Transaction, TransactionDto } from "./types";
+import { ETH_DECIMALS } from "./constants";
 
 interface DataType {
   hash: string;
@@ -37,8 +39,9 @@ const Main: React.FC = () => {
   const { data, isLoading, isError, error } = useTransactions(inputHash);
   const { data: ethPrice } = useExchangeRate();
 
-  const [startTimestamp, setStartTimestamp] = useState<string>('');
-  const [endTimestamp, setEndTimestamp] = useState<string>('');
+  const [reportData, setReportData] = useState<Transaction[]>([]);
+  const [startTimestamp, setStartTimestamp] = useState<string>("");
+  const [endTimestamp, setEndTimestamp] = useState<string>("");
   const [isReportMode, setIsReportMode] = useState(false);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
@@ -49,9 +52,66 @@ const Main: React.FC = () => {
     total: data ? data.length : 0,
   });
 
-  // useEffect(() => {
-  //   inputHash === "" ? setIsDefaultQuery(true) : setIsDefaultQuery(false);
-  // }, [inputHash]);
+  const triggerReport = async () => {
+    const response = await fetch(
+      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          protocol: "uniswapv3",
+          pool: "eth_usdc",
+          startTime: startTimestamp,
+          endTime: endTimestamp,
+        }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error("Failed to trigger transaction report");
+    }
+    const { location } = await response.json();
+    if (!location) {
+      throw new Error("Location header not found");
+    }
+    return location;
+  };
+
+  const getReportStatus = async (location: string) => {
+    const response = await fetch(process.env.NEXT_PUBLIC_API_URL + location, {
+      method: "GET",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to fetch transaction report status");
+    }
+    const data = await response.json();
+    return data.status;
+  };
+
+  const getReport = async (location: string, page: number, limit: number) => {
+    if (!location) {
+      return;
+    }
+    const reportId = location.split("/").pop();
+    const url = new URL(
+      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports/${reportId}`
+    );
+    url.searchParams.set("page", tableParams.current!.toString());
+    url.searchParams.set("limit", tableParams.pageSize!.toString());
+
+    const response = await fetch(
+      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports/${reportId}`,
+      {
+        method: "GET",
+      }
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch transaction report status");
+    }
+    const data = await response.json();
+    return data;
+  };
 
   useEffect(() => {
     if (!isReportMode && data) {
@@ -68,7 +128,7 @@ const Main: React.FC = () => {
         .slice()
         .reduce((acc, item) => acc + parseFloat(item.feeUsdt), 0);
 
-      setTotalEthFees(totalEth.toFixed(2));
+      setTotalEthFees(totalEth.toFixed(ETH_DECIMALS));
       setTotalUsdtFees(totalUsdt.toFixed(2));
     }
   }, [data, isReportMode, tableParams]);
@@ -90,8 +150,8 @@ const Main: React.FC = () => {
       return;
     }
 
-    const start = new Date(dateString[0]).toISOString();
-    const end = new Date(dateString[1]).toISOString();
+    const start = dayjs(dateString[0]).toISOString();
+    const end = dayjs(dateString[1]).toISOString();
 
     setStartTimestamp(start);
     setEndTimestamp(end);
@@ -102,13 +162,38 @@ const Main: React.FC = () => {
     setInputValue(event.target.value);
   };
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
     if (!isReportMode) {
       setInputHash(inputValue);
       queryClient.invalidateQueries(["transactions", inputValue]);
     } else {
       setLoading(true);
-      // queryClient.invalidateQueries(["transactions", inputValue]);
+      const location = await triggerReport();
+      let status = await getReportStatus(location);
+      while (status !== "completed") {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        status = await getReportStatus(location);
+      }
+      const data: ReportDataDto = await getReport(
+        location,
+        tableParams.current!,
+        tableParams.pageSize!
+      );
+      const { total, totalFee, data: reportData } = data;
+      const formattedData = reportData.map((item) => ({
+        hash: item.hash,
+        feeEth: BigNumber(item.fee.eth).dividedBy(1e18).toFixed(2),
+        feeUsdt: parseFloat(item.fee.usdt).toFixed(2),
+      }));
+      setTableParams({
+        ...tableParams,
+        total,
+      });
+      setReportData(formattedData);
+      setTotalEthFees(
+        BigNumber(totalFee.eth).dividedBy(1e18).toFixed(ETH_DECIMALS)
+      );
+      setTotalUsdtFees(parseFloat(totalFee.usdt).toFixed(2));
       setLoading(false);
     }
   };
@@ -128,7 +213,6 @@ const Main: React.FC = () => {
         <Form.Item label="Time Range">
           <DatePicker.RangePicker
             showTime={{ format: "HH:mm" }}
-            format="YYYY-MM-DD HH:mm"
             onChange={onDateChange}
           />
         </Form.Item>
@@ -161,7 +245,7 @@ const Main: React.FC = () => {
       <Table
         columns={columns}
         rowKey={(entry) => entry.hash}
-        dataSource={data}
+        dataSource={isReportMode ? reportData : data}
         pagination={{
           ...tableParams,
           showSizeChanger: true,
