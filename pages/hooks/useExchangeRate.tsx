@@ -6,7 +6,7 @@ export const useExchangeRate = () => {
   return useQuery<number, Error>(
     queryKey,
     async () => {
-      const url = new URL(process.env.NEXT_PUBLIC_API_URL + "exchange-rate");
+      const url = new URL(process.env.NEXT_PUBLIC_API_URL + "v1/exchange-rate");
       url.searchParams.set("from", 'eth');
       url.searchParams.set("to", 'usdt');
 

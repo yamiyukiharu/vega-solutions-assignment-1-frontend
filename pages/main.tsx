@@ -4,11 +4,11 @@ import React, { use, useEffect, useState } from "react";
 import Paragraph from "antd/lib/typography/Paragraph";
 import Table, { ColumnsType, TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
-import { Transaction, TransactionDto } from "./types";
 import { useTransactions } from "./hooks/useTransactions";
 import BigNumber from "bignumber.js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useExchangeRate } from "./hooks/useExchangeRate";
+import dayjs from "dayjs";
 
 interface DataType {
   hash: string;
@@ -36,7 +36,10 @@ const Main: React.FC = () => {
   const [inputHash, setInputHash] = useState<string>("");
   const { data, isLoading, isError, error } = useTransactions(inputHash);
   const { data: ethPrice } = useExchangeRate();
-  const [isTimeRangeMode, setIsReportMode] = useState(false);
+
+  const [startTimestamp, setStartTimestamp] = useState<string>('');
+  const [endTimestamp, setEndTimestamp] = useState<string>('');
+  const [isReportMode, setIsReportMode] = useState(false);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
   const [loading, setLoading] = useState(false);
@@ -51,7 +54,7 @@ const Main: React.FC = () => {
   // }, [inputHash]);
 
   useEffect(() => {
-    if (!isTimeRangeMode && data) {
+    if (!isReportMode && data) {
       const currentView = data.slice(
         (tableParams.current! - 1) * tableParams.pageSize!,
         tableParams.current! * tableParams.pageSize!
@@ -68,7 +71,7 @@ const Main: React.FC = () => {
       setTotalEthFees(totalEth.toFixed(2));
       setTotalUsdtFees(totalUsdt.toFixed(2));
     }
-  }, [data, isTimeRangeMode, tableParams]);
+  }, [data, isReportMode, tableParams]);
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -78,12 +81,21 @@ const Main: React.FC = () => {
     setTableParams(pagination);
   };
 
-  const onChange = (
+  const onDateChange = (
     value: RangePickerProps["value"],
     dateString: [string, string] | string
   ) => {
-    console.log("Selected Time: ", value);
-    console.log("Formatted Selected Time: ", dateString);
+    if (!value) {
+      setIsReportMode(false);
+      return;
+    }
+
+    const start = new Date(dateString[0]).toISOString();
+    const end = new Date(dateString[1]).toISOString();
+
+    setStartTimestamp(start);
+    setEndTimestamp(end);
+    setIsReportMode(true);
   };
 
   const onInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,8 +103,14 @@ const Main: React.FC = () => {
   };
 
   const onSubmit = () => {
-    setInputHash(inputValue);
-    queryClient.invalidateQueries(["transactions", inputValue]);
+    if (!isReportMode) {
+      setInputHash(inputValue);
+      queryClient.invalidateQueries(["transactions", inputValue]);
+    } else {
+      setLoading(true);
+      // queryClient.invalidateQueries(["transactions", inputValue]);
+      setLoading(false);
+    }
   };
 
   return (
@@ -111,7 +129,7 @@ const Main: React.FC = () => {
           <DatePicker.RangePicker
             showTime={{ format: "HH:mm" }}
             format="YYYY-MM-DD HH:mm"
-            onChange={onChange}
+            onChange={onDateChange}
           />
         </Form.Item>
 
