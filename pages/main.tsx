@@ -11,6 +11,7 @@ import { useExchangeRate } from "./hooks/useExchangeRate";
 import dayjs from "dayjs";
 import { ReportDataDto, Transaction, TransactionDto } from "./types";
 import { ETH_DECIMALS } from "./constants";
+import { get } from "http";
 
 interface DataType {
   hash: string;
@@ -34,23 +35,52 @@ const columns: ColumnsType<DataType> = [
 const Main: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [inputValue, setInputValue] = useState<string>("");
-  const [inputHash, setInputHash] = useState<string>("");
-  const { data, isLoading, isError, error } = useTransactions(inputHash);
   const { data: ethPrice } = useExchangeRate();
 
-  const [reportData, setReportData] = useState<Transaction[]>([]);
-  const [startTimestamp, setStartTimestamp] = useState<string>("");
-  const [endTimestamp, setEndTimestamp] = useState<string>("");
-  const [isReportMode, setIsReportMode] = useState(false);
+  const [data, setData] = useState<Transaction[]>([]);
+  const [inputValue, setInputValue] = useState<string>("");
+  const [startTime, setStartTime] = useState<string>("");
+  const [endTime, setEndTime] = useState<string>("");
+  const [hasTimeRange, setHasTimeRange] = useState(false);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
   const [loading, setLoading] = useState(false);
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
-    pageSize: 20,
-    total: data ? data.length : 0,
+    pageSize: 50,
+    total: 50,
   });
+
+  const getTransactions = async (hash?: string) => {
+    const url = new URL(process.env.NEXT_PUBLIC_API_URL + "v1/transactions");
+    url.searchParams.set("protocol", "uniswapv3");
+    url.searchParams.set("pool", "eth_usdc");
+    url.searchParams.set("page", "0");
+    url.searchParams.set("limit", "50");
+
+    if (hash) {
+      url.searchParams.set("hash", hash);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch transactions");
+    }
+
+    const { data }: { data: TransactionDto } = await response.json();
+
+    return data.map((entry: any) => ({
+      hash: entry.hash,
+      feeEth: entry.fee.eth,
+      feeUsdt: parseFloat(entry.fee.usdt).toFixed(2),
+    }));
+  };
 
   const triggerReport = async () => {
     const response = await fetch(
@@ -63,8 +93,8 @@ const Main: React.FC = () => {
         body: JSON.stringify({
           protocol: "uniswapv3",
           pool: "eth_usdc",
-          startTime: startTimestamp,
-          endTime: endTimestamp,
+          startTime: startTime,
+          endTime: endTime,
         }),
       }
     );
@@ -113,25 +143,30 @@ const Main: React.FC = () => {
     return data;
   };
 
+  const setTotalFeesForCurrentPage = (data: Transaction[]) => {
+    const currentView = data.slice(
+      (tableParams.current! - 1) * tableParams.pageSize!,
+      tableParams.current! * tableParams.pageSize!
+    );
+    const totalEth = currentView
+      .slice()
+      .reduce((acc, item) => acc.plus(item.feeEth), BigNumber(0))
+      .dividedBy(1e18); // convert wei to ETH
+
+    const totalUsdt = currentView
+      .slice()
+      .reduce((acc, item) => acc + parseFloat(item.feeUsdt), 0);
+
+    setTotalEthFees(totalEth.toFixed(ETH_DECIMALS));
+    setTotalUsdtFees(totalUsdt.toFixed(2));
+  };
+
   useEffect(() => {
-    if (!isReportMode && data) {
-      const currentView = data.slice(
-        (tableParams.current! - 1) * tableParams.pageSize!,
-        tableParams.current! * tableParams.pageSize!
-      );
-      const totalEth = currentView
-        .slice()
-        .reduce((acc, item) => acc.plus(item.feeEth), BigNumber(0))
-        .dividedBy(1e18); // convert wei to ETH
-
-      const totalUsdt = currentView
-        .slice()
-        .reduce((acc, item) => acc + parseFloat(item.feeUsdt), 0);
-
-      setTotalEthFees(totalEth.toFixed(ETH_DECIMALS));
-      setTotalUsdtFees(totalUsdt.toFixed(2));
-    }
-  }, [data, isReportMode, tableParams]);
+    getTransactions().then((data) => {
+      setData(data);
+      setTotalFeesForCurrentPage(data);
+    });
+  }, []);
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -146,16 +181,16 @@ const Main: React.FC = () => {
     dateString: [string, string] | string
   ) => {
     if (!value) {
-      setIsReportMode(false);
+      setHasTimeRange(false);
       return;
     }
 
     const start = dayjs(dateString[0]).toISOString();
     const end = dayjs(dateString[1]).toISOString();
 
-    setStartTimestamp(start);
-    setEndTimestamp(end);
-    setIsReportMode(true);
+    setStartTime(start);
+    setEndTime(end);
+    setHasTimeRange(true);
   };
 
   const onInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,10 +198,7 @@ const Main: React.FC = () => {
   };
 
   const onSubmit = async () => {
-    if (!isReportMode) {
-      setInputHash(inputValue);
-      queryClient.invalidateQueries(["transactions", inputValue]);
-    } else {
+    if (hasTimeRange) {
       setLoading(true);
       const location = await triggerReport();
       let status = await getReportStatus(location);
@@ -189,12 +221,20 @@ const Main: React.FC = () => {
         ...tableParams,
         total,
       });
-      setReportData(formattedData);
+      setData(formattedData);
       setTotalEthFees(
         BigNumber(totalFee.eth).dividedBy(1e18).toFixed(ETH_DECIMALS)
       );
       setTotalUsdtFees(parseFloat(totalFee.usdt).toFixed(2));
       setLoading(false);
+    } else {
+      const data = await getTransactions(inputValue);
+      setData(data);
+      setTotalFeesForCurrentPage(data);
+      setTableParams({
+        ...tableParams,
+        total: data.length,
+      });
     }
   };
 
@@ -245,12 +285,11 @@ const Main: React.FC = () => {
       <Table
         columns={columns}
         rowKey={(entry) => entry.hash}
-        dataSource={isReportMode ? reportData : data}
+        dataSource={data}
         pagination={{
           ...tableParams,
           showSizeChanger: true,
           pageSizeOptions: ["20", "50", "100"],
-          defaultPageSize: 20,
         }}
         loading={loading}
         onChange={handleTableChange}
