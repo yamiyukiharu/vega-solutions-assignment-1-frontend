@@ -1,12 +1,13 @@
 import { Button, DatePicker, Form, Input, Pagination } from "antd";
 import type { RangePickerProps } from "antd/lib/date-picker";
-import React, { useEffect, useState } from "react";
-import DataTable from "./DataTable";
+import React, { use, useEffect, useState } from "react";
 import Paragraph from "antd/lib/typography/Paragraph";
 import Table, { ColumnsType, TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
 import { Transaction, TransactionDto } from "./types";
+import { useTransactions } from "./hooks/useTransactions";
 import BigNumber from "bignumber.js";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface DataType {
   hash: string;
@@ -28,8 +29,12 @@ const columns: ColumnsType<DataType> = [
 ];
 
 const Main: React.FC = () => {
-  const [data, setData] = useState<Transaction[]>([]);
-  const [isDefaultQuery, setIsDefaultQuery] = useState(true);
+  const queryClient = useQueryClient();
+
+  const [inputValue, setInputValue] = useState<string>("");
+  const [inputHash, setInputHash] = useState<string>("");
+  const { data, isLoading, isError, error } = useTransactions(inputHash);
+  const [isTimeRangeMode, setIsReportMode] = useState(false);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
   const [ethPrice, setEthPrice] = useState(0);
@@ -37,11 +42,15 @@ const Main: React.FC = () => {
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 20,
-    total: data.length,
+    total: data ? data.length : 0,
   });
 
+  // useEffect(() => {
+  //   inputHash === "" ? setIsDefaultQuery(true) : setIsDefaultQuery(false);
+  // }, [inputHash]);
+
   useEffect(() => {
-    if (isDefaultQuery) {
+    if (!isTimeRangeMode && data) {
       const currentView = data.slice(
         (tableParams.current! - 1) * tableParams.pageSize!,
         tableParams.current! * tableParams.pageSize!
@@ -58,48 +67,21 @@ const Main: React.FC = () => {
       setTotalEthFees(totalEth.toFixed(2));
       setTotalUsdtFees(totalUsdt.toFixed(2));
     }
-  }, [data, isDefaultQuery, tableParams]);
+  }, [data, isTimeRangeMode, tableParams]);
 
   useEffect(() => {
-    fetch(
-      process.env.NEXT_PUBLIC_API_URL +
-        "transactions?protocol=uniswapv3&pool=eth_usdc&page=0&limit=50",
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    )
-      .then((response) => response.json())
-      .then((data: TransactionDto) => {
-        const formattedData = data.data.map((entry: any) => ({
-          hash: entry.hash,
-          feeEth: entry.fee.eth,
-          feeUsdt: parseFloat(entry.fee.usdt).toFixed(2),
-        }));
-        setData(formattedData);
-      })
-      .catch((error) => console.error(error));
-
-    fetch(
-      process.env.NEXT_PUBLIC_API_URL +
-        "exchange-rate?from=eth&to=usdt",
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    )
+    fetch(process.env.NEXT_PUBLIC_API_URL + "exchange-rate?from=eth&to=usdt", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
       .then((response) => response.json())
       .then((data: number) => {
         setEthPrice(data);
       })
       .catch((error) => console.error(error));
   }, []);
-
-
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -117,6 +99,15 @@ const Main: React.FC = () => {
     console.log("Formatted Selected Time: ", dateString);
   };
 
+  const onInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(event.target.value);
+  };
+
+  const onSubmit = () => {
+    setInputHash(inputValue);
+    queryClient.invalidateQueries(["transactions", inputValue]);
+  };
+
   return (
     <>
       <Form
@@ -124,10 +115,10 @@ const Main: React.FC = () => {
         labelAlign="left"
         wrapperCol={{ flex: 1 }}
         colon={false}
-        style={{ maxWidth: 600 }}
+        style={{ maxWidth: 800 }}
       >
         <Form.Item label="Transaction Hash">
-          <Input />
+          <Input value={inputValue} onChange={onInputChange} />
         </Form.Item>
         <Form.Item label="Time Range">
           <DatePicker.RangePicker
@@ -138,7 +129,7 @@ const Main: React.FC = () => {
         </Form.Item>
 
         <Form.Item label=" ">
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" onClick={onSubmit}>
             Submit
           </Button>
         </Form.Item>
