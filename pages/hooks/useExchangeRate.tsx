@@ -24,6 +24,9 @@ export const useExchangeRate = () => {
       const data: number = await response.json();
 
       return data;
+    },
+    {
+      refetchInterval: 5000,
     }
   );
 };

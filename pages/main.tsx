@@ -12,6 +12,8 @@ import dayjs from "dayjs";
 import { ReportDataDto, Transaction, TransactionDto } from "./types";
 import { ETH_DECIMALS } from "./constants";
 import { get } from "http";
+import { getTransactions } from "./api/transactions";
+import { getReport, getReportStatus, triggerReport } from "./api/reports";
 
 interface DataType {
   hash: string;
@@ -50,98 +52,6 @@ const Main: React.FC = () => {
     pageSize: 50,
     total: 50,
   });
-
-  const getTransactions = async (hash?: string) => {
-    const url = new URL(process.env.NEXT_PUBLIC_API_URL + "v1/transactions");
-    url.searchParams.set("protocol", "uniswapv3");
-    url.searchParams.set("pool", "eth_usdc");
-    url.searchParams.set("page", "0");
-    url.searchParams.set("limit", "50");
-
-    if (hash) {
-      url.searchParams.set("hash", hash);
-    }
-
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch transactions");
-    }
-
-    const { data }: { data: TransactionDto } = await response.json();
-
-    return data.map((entry: any) => ({
-      hash: entry.hash,
-      feeEth: entry.fee.eth,
-      feeUsdt: parseFloat(entry.fee.usdt).toFixed(2),
-    }));
-  };
-
-  const triggerReport = async () => {
-    const response = await fetch(
-      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          protocol: "uniswapv3",
-          pool: "eth_usdc",
-          startTime: startTime,
-          endTime: endTime,
-        }),
-      }
-    );
-    if (!response.ok) {
-      throw new Error("Failed to trigger transaction report");
-    }
-    const { location } = await response.json();
-    if (!location) {
-      throw new Error("Location header not found");
-    }
-    return location;
-  };
-
-  const getReportStatus = async (location: string) => {
-    const response = await fetch(process.env.NEXT_PUBLIC_API_URL + location, {
-      method: "GET",
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch transaction report status");
-    }
-    const data = await response.json();
-    return data.status;
-  };
-
-  const getReport = async (location: string, page: number, limit: number) => {
-    if (!location) {
-      return;
-    }
-    const reportId = location.split("/").pop();
-    const url = new URL(
-      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports/${reportId}`
-    );
-    url.searchParams.set("page", tableParams.current!.toString());
-    url.searchParams.set("limit", tableParams.pageSize!.toString());
-
-    const response = await fetch(
-      process.env.NEXT_PUBLIC_API_URL + `v1/transactions/reports/${reportId}`,
-      {
-        method: "GET",
-      }
-    );
-    if (!response.ok) {
-      throw new Error("Failed to fetch transaction report status");
-    }
-    const data = await response.json();
-    return data;
-  };
 
   const setTotalFeesForCurrentPage = (data: Transaction[]) => {
     const currentView = data.slice(
@@ -200,14 +110,16 @@ const Main: React.FC = () => {
   const onSubmit = async () => {
     if (hasTimeRange) {
       setLoading(true);
-      const location = await triggerReport();
+      const location = await triggerReport(startTime, endTime);
       let status = await getReportStatus(location);
       while (status !== "completed") {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         status = await getReportStatus(location);
       }
+      const reportId = location.split("/").pop();
+
       const data: ReportDataDto = await getReport(
-        location,
+        reportId,
         tableParams.current!,
         tableParams.pageSize!
       );
