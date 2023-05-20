@@ -8,6 +8,7 @@ import { Transaction, TransactionDto } from "./types";
 import { useTransactions } from "./hooks/useTransactions";
 import BigNumber from "bignumber.js";
 import { useQueryClient } from "@tanstack/react-query";
+import { useExchangeRate } from "./hooks/useExchangeRate";
 
 interface DataType {
   hash: string;
@@ -34,10 +35,10 @@ const Main: React.FC = () => {
   const [inputValue, setInputValue] = useState<string>("");
   const [inputHash, setInputHash] = useState<string>("");
   const { data, isLoading, isError, error } = useTransactions(inputHash);
+  const { data: ethPrice } = useExchangeRate();
   const [isTimeRangeMode, setIsReportMode] = useState(false);
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
-  const [ethPrice, setEthPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
@@ -68,20 +69,6 @@ const Main: React.FC = () => {
       setTotalUsdtFees(totalUsdt.toFixed(2));
     }
   }, [data, isTimeRangeMode, tableParams]);
-
-  useEffect(() => {
-    fetch(process.env.NEXT_PUBLIC_API_URL + "exchange-rate?from=eth&to=usdt", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then((response) => response.json())
-      .then((data: number) => {
-        setEthPrice(data);
-      })
-      .catch((error) => console.error(error));
-  }, []);
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
