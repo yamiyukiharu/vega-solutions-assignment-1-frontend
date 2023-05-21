@@ -10,7 +10,7 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <div className="flex flex-col p-10">
-        <Title>UniswapV3 USDC/ETH Pool Transactions</Title>
+        <Title>UniswapV3 WETH/USDC Pool Transactions</Title>
         <Main />
 
       </div>
