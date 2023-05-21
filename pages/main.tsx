@@ -1,30 +1,30 @@
-import type { RangePickerProps } from "antd/lib/date-picker";
+import dayjs from "dayjs";
+import BigNumber from "bignumber.js";
 import React, { useEffect, useState } from "react";
 import { TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
-import BigNumber from "bignumber.js";
 import { useExchangeRate } from "../hooks/useExchangeRate";
-import dayjs from "dayjs";
 import { DataType, ReportDataDto, Transaction } from "../types";
-import { ETH_DECIMALS } from "../constants";
+import { ETH_DECIMALS, WEI_DECIMALS } from "../constants";
 import { getTransactions } from "./api/transactions";
 import { getReport, getReportStatus, triggerReport } from "./api/reports";
 import InputForm from "./components/InputForm";
 import ReportSummary from "./components/ReportSummary";
 import TransactionsTable from "./components/TransactionsTable";
 
-const Main: React.FC = () => {
+import type { RangePickerProps } from "antd/lib/date-picker";
 
+const Main: React.FC = () => {
   const { data: ethPrice } = useExchangeRate();
 
-  const [data, setData] = useState<Transaction[]>([]);
-  const [inputValue, setInputValue] = useState<string>("");
+  const [loading, setLoading] = useState(false);
   const [startTime, setStartTime] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
-  const [hasTimeRange, setHasTimeRange] = useState(false);
+  const [inputValue, setInputValue] = useState<string>("");
   const [totalEthFees, setTotalEthFees] = useState("0");
   const [totalUsdtFees, setTotalUsdtFees] = useState("0");
-  const [loading, setLoading] = useState(false);
+  const [hasTimeRange, setHasTimeRange] = useState(false);
+  const [data, setData] = useState<Transaction[]>([]);
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 50,
@@ -39,7 +39,7 @@ const Main: React.FC = () => {
     const totalEth = currentView
       .slice()
       .reduce((acc, item) => acc.plus(item.feeEth), BigNumber(0))
-      .dividedBy(1e18); // convert wei to ETH
+      .dividedBy(WEI_DECIMALS); // convert wei to ETH
 
     const totalUsdt = currentView
       .slice()
@@ -86,38 +86,51 @@ const Main: React.FC = () => {
   };
 
   const onSubmit = async () => {
+    // Getting transactions with time period is considered as a report
     if (hasTimeRange) {
       setLoading(true);
+
       const location = await triggerReport(startTime, endTime);
+
+      // Poll for report status until it's completed
       let status = await getReportStatus(location);
       while (status !== "completed") {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         status = await getReportStatus(location);
       }
-      const reportId = location.split("/").pop();
 
+      // Fetch report data
+      const reportId = location.split("/").pop();
       const data: ReportDataDto = await getReport(
         reportId,
         tableParams.current!,
         tableParams.pageSize!
       );
+
+      // Format data
       const { total, totalFee, data: reportData } = data;
       const formattedData = reportData.map((item) => ({
         hash: item.hash,
-        feeEth: BigNumber(item.fee.eth).dividedBy(1e18).toFixed(2),
+        feeEth: BigNumber(item.fee.eth)
+          .dividedBy(WEI_DECIMALS)
+          .toFixed(ETH_DECIMALS),
         feeUsdt: parseFloat(item.fee.usdt).toFixed(2),
       }));
+
+      // Update states
+      setData(formattedData);
+      setTotalEthFees(
+        BigNumber(totalFee.eth).dividedBy(WEI_DECIMALS).toFixed(ETH_DECIMALS)
+      );
+      setTotalUsdtFees(parseFloat(totalFee.usdt).toFixed(2));
       setTableParams({
         ...tableParams,
         total,
       });
-      setData(formattedData);
-      setTotalEthFees(
-        BigNumber(totalFee.eth).dividedBy(1e18).toFixed(ETH_DECIMALS)
-      );
-      setTotalUsdtFees(parseFloat(totalFee.usdt).toFixed(2));
       setLoading(false);
     } else {
+      // When there's no time range, summary data is based on current page of table
+
       const data = await getTransactions(inputValue);
       setData(data);
       setTotalFeesForCurrentPage(data);
