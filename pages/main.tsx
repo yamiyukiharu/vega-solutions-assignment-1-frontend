@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react";
 import { TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
 import { useExchangeRate } from "../hooks/useExchangeRate";
-import { DataType, ReportDataDto, Transaction } from "../types";
-import { ETH_DECIMALS, WEI_DECIMALS } from "../constants";
+import { DataType, ReportDataDto, Transaction, TransactionDto } from "../types";
+import { ETH_DECIMALS, REPORT_TX_TO_FETCH, WEI_DECIMALS } from "../constants";
 import { getTransactions } from "./api/transactions";
 import { getReport, getReportStatus, triggerReport } from "./api/reports";
 import InputForm from "./components/InputForm";
@@ -18,6 +18,8 @@ const Main: React.FC = () => {
   const { data: ethPrice } = useExchangeRate();
 
   const [loading, setLoading] = useState(false);
+  const [reportId, setReportId] = useState("");
+  const [reportDataPage, setReportDataPage] = useState<number>(0);
   const [startTime, setStartTime] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
   const [inputValue, setInputValue] = useState<string>("");
@@ -49,12 +51,37 @@ const Main: React.FC = () => {
     setTotalUsdtFees(totalUsdt.toFixed(2));
   };
 
+  const formatData = (reportData: TransactionDto): Transaction[] => {
+    return reportData.map((item) => ({
+      hash: item.hash,
+      feeEth: BigNumber(item.fee.eth)
+        .dividedBy(WEI_DECIMALS)
+        .toFixed(ETH_DECIMALS),
+      feeUsdt: parseFloat(item.fee.usdt).toFixed(2),
+    }));
+  };
+
   useEffect(() => {
     getTransactions().then((data) => {
       setData(data);
       setTotalFeesForCurrentPage(data);
     });
   }, []);
+
+  useEffect(() => {
+    if (!reportId) return;
+
+    const { current, pageSize } = tableParams;
+    if (current! * pageSize! < data.length) return;
+
+    getReport(reportId, reportDataPage + 1, REPORT_TX_TO_FETCH).then(
+      (tx: ReportDataDto) => {
+        const formattedData = formatData(tx.data);
+        setData((prev) => [...prev, ...formattedData]);
+        setReportDataPage((prev) => prev + 1);
+      }
+    );
+  }, [tableParams, reportId]);
 
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -98,24 +125,18 @@ const Main: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         status = await getReportStatus(location);
       }
-
+      
       // Fetch report data
       const reportId = location.split("/").pop();
       const data: ReportDataDto = await getReport(
         reportId,
-        tableParams.current!,
-        tableParams.pageSize!
+        0,
+        REPORT_TX_TO_FETCH // fetch as much data as possible
       );
 
       // Format data
       const { total, totalFee, data: reportData } = data;
-      const formattedData = reportData.map((item) => ({
-        hash: item.hash,
-        feeEth: BigNumber(item.fee.eth)
-          .dividedBy(WEI_DECIMALS)
-          .toFixed(ETH_DECIMALS),
-        feeUsdt: parseFloat(item.fee.usdt).toFixed(2),
-      }));
+      const formattedData = formatData(reportData);
 
       // Update states
       setData(formattedData);
@@ -127,6 +148,8 @@ const Main: React.FC = () => {
         ...tableParams,
         total,
       });
+      setReportId(reportId);
+      setReportDataPage(0);
       setLoading(false);
     } else {
       // When there's no time range, summary data is based on current page of table
@@ -138,6 +161,8 @@ const Main: React.FC = () => {
         ...tableParams,
         total: data.length,
       });
+      setReportId("");
+      setReportDataPage(0);
     }
   };
 
