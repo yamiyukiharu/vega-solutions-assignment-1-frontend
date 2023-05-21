@@ -173,6 +173,7 @@ const Main: React.FC = () => {
         onInputChange={onInputChange}
         onDateChange={onDateChange}
         inputValue={inputValue}
+        disabled={loading}
       />
 
       <ReportSummary

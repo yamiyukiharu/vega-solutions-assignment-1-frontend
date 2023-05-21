@@ -10,6 +10,7 @@ interface InputFormProps {
     dateString: [string, string] | string
   ) => void;
   onSubmit: () => Promise<void>;
+  disabled: boolean;
 }
 
 const InputForm: React.FC<InputFormProps> = ({
@@ -17,6 +18,7 @@ const InputForm: React.FC<InputFormProps> = ({
   onInputChange,
   onDateChange,
   onSubmit,
+  disabled
 }) => {
   return (
     <Form
@@ -37,7 +39,7 @@ const InputForm: React.FC<InputFormProps> = ({
       </Form.Item>
 
       <Form.Item label=" ">
-        <Button type="primary" htmlType="submit" onClick={onSubmit}>
+        <Button type="primary" htmlType="submit" onClick={onSubmit} disabled={disabled}>
           Submit
         </Button>
       </Form.Item>
