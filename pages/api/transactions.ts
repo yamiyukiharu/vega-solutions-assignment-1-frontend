@@ -1,5 +1,5 @@
 import { Alert } from "antd";
-import { TransactionDto } from "../types";
+import { TransactionDto } from "../../types";
 
 export const getTransactions = async (hash?: string) => {
   const url = new URL(process.env.NEXT_PUBLIC_API_URL + "v1/transactions");

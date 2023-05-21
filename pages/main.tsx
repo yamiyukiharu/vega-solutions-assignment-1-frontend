@@ -4,14 +4,12 @@ import React, { use, useEffect, useState } from "react";
 import Paragraph from "antd/lib/typography/Paragraph";
 import Table, { ColumnsType, TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
-import { useTransactions } from "./hooks/useTransactions";
 import BigNumber from "bignumber.js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useExchangeRate } from "./hooks/useExchangeRate";
+import { useQueryClient } from "@tanstack/react-query";
+import { useExchangeRate } from "../hooks/useExchangeRate";
 import dayjs from "dayjs";
-import { ReportDataDto, Transaction, TransactionDto } from "./types";
-import { ETH_DECIMALS } from "./constants";
-import { get } from "http";
+import { ReportDataDto, Transaction, TransactionDto } from "../types";
+import { ETH_DECIMALS } from "../constants";
 import { getTransactions } from "./api/transactions";
 import { getReport, getReportStatus, triggerReport } from "./api/reports";
 
