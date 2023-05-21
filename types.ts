@@ -20,3 +20,8 @@ export type ReportDataDto = {
   },
   data: TransactionDto;
 }
+
+export type DataType = {
+  hash: string;
+  feeUsdt: string;
+}

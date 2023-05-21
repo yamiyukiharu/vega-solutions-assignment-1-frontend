@@ -1,39 +1,19 @@
-import { Button, DatePicker, Form, Input, Pagination } from "antd";
 import type { RangePickerProps } from "antd/lib/date-picker";
-import React, { use, useEffect, useState } from "react";
-import Paragraph from "antd/lib/typography/Paragraph";
-import Table, { ColumnsType, TablePaginationConfig } from "antd/lib/table";
+import React, { useEffect, useState } from "react";
+import { TablePaginationConfig } from "antd/lib/table";
 import { FilterValue, SorterResult } from "antd/lib/table/interface";
 import BigNumber from "bignumber.js";
-import { useQueryClient } from "@tanstack/react-query";
 import { useExchangeRate } from "../hooks/useExchangeRate";
 import dayjs from "dayjs";
-import { ReportDataDto, Transaction, TransactionDto } from "../types";
+import { DataType, ReportDataDto, Transaction } from "../types";
 import { ETH_DECIMALS } from "../constants";
 import { getTransactions } from "./api/transactions";
 import { getReport, getReportStatus, triggerReport } from "./api/reports";
-
-interface DataType {
-  hash: string;
-  feeUsdt: string;
-}
-
-const columns: ColumnsType<DataType> = [
-  {
-    title: "Hash",
-    dataIndex: "hash",
-    sorter: true,
-    width: "40%",
-  },
-  {
-    title: "Fee (USDT)",
-    dataIndex: "feeUsdt",
-    width: "20%",
-  },
-];
+import InputForm from "./components/InputForm";
+import ReportSummary from "./components/ReportSummary";
+import TransactionsTable from "./components/TransactionsTable";
 
 const Main: React.FC = () => {
-  const queryClient = useQueryClient();
 
   const { data: ethPrice } = useExchangeRate();
 
@@ -150,59 +130,24 @@ const Main: React.FC = () => {
 
   return (
     <>
-      <Form
-        labelCol={{ flex: "200px" }}
-        labelAlign="left"
-        wrapperCol={{ flex: 1 }}
-        colon={false}
-        style={{ maxWidth: 800 }}
-      >
-        <Form.Item label="Transaction Hash">
-          <Input value={inputValue} onChange={onInputChange} />
-        </Form.Item>
-        <Form.Item label="Time Range">
-          <DatePicker.RangePicker
-            showTime={{ format: "HH:mm" }}
-            onChange={onDateChange}
-          />
-        </Form.Item>
+      <InputForm
+        onSubmit={onSubmit}
+        onInputChange={onInputChange}
+        onDateChange={onDateChange}
+        inputValue={inputValue}
+      />
 
-        <Form.Item label=" ">
-          <Button type="primary" htmlType="submit" onClick={onSubmit}>
-            Submit
-          </Button>
-        </Form.Item>
-      </Form>
+      <ReportSummary
+        totalEthFees={totalEthFees}
+        totalUsdtFees={totalUsdtFees}
+        ethPrice={ethPrice?.toString() || "NA"}
+      />
 
-      <Form
-        labelCol={{ flex: "200px" }}
-        labelAlign="left"
-        wrapperCol={{ flex: 1 }}
-        colon={false}
-        style={{ maxWidth: 600 }}
-      >
-        <Form.Item label="Total Fees (ETH)">
-          <Paragraph>{totalEthFees}</Paragraph>
-        </Form.Item>
-        <Form.Item label="Total Fees (USDT)">
-          <Paragraph>{totalUsdtFees}</Paragraph>
-        </Form.Item>
-        <Form.Item label="Current ETH/USDT price">
-          <Paragraph>{ethPrice}</Paragraph>
-        </Form.Item>
-      </Form>
-
-      <Table
-        columns={columns}
-        rowKey={(entry) => entry.hash}
-        dataSource={data}
-        pagination={{
-          ...tableParams,
-          showSizeChanger: true,
-          pageSizeOptions: ["20", "50", "100"],
-        }}
+      <TransactionsTable
+        data={data}
+        tableParams={tableParams}
         loading={loading}
-        onChange={handleTableChange}
+        handleTableChange={handleTableChange}
       />
     </>
   );
