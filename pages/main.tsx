@@ -83,7 +83,7 @@ const Main: React.FC = () => {
     );
   }, [tableParams, reportId]);
 
-  const handleTableChange = (
+  const onTableChange = (
     pagination: TablePaginationConfig,
     filters: Record<string, FilterValue | null>,
     sorter: SorterResult<DataType> | SorterResult<DataType>[]
@@ -186,7 +186,7 @@ const Main: React.FC = () => {
         data={data}
         tableParams={tableParams}
         loading={loading}
-        handleTableChange={handleTableChange}
+        onTableChange={onTableChange}
       />
     </>
   );

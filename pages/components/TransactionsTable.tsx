@@ -21,7 +21,7 @@ interface Props {
   data: DataType[];
   tableParams: TablePaginationConfig;
   loading: boolean;
-  handleTableChange: (
+  onTableChange: (
     pagination: TablePaginationConfig,
     filters: Record<string, any>,
     sorter: any
@@ -32,7 +32,7 @@ const TransactionsTable = ({
   data,
   tableParams,
   loading,
-  handleTableChange,
+  onTableChange,
 }: Props) => {
   return (
     <Table
@@ -45,7 +45,7 @@ const TransactionsTable = ({
         pageSizeOptions: ["20", "50", "100"],
       }}
       loading={loading}
-      onChange={handleTableChange}
+      onChange={onTableChange}
     />
   );
 };
