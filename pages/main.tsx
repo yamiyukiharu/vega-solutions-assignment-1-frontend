@@ -30,20 +30,16 @@ const Main: React.FC = () => {
   const [tableParams, setTableParams] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 50,
-    total: 50,
+    total: 10000,
   });
 
   const setTotalFeesForCurrentPage = (data: Transaction[]) => {
-    const currentView = data.slice(
-      (tableParams.current! - 1) * tableParams.pageSize!,
-      tableParams.current! * tableParams.pageSize!
-    );
-    const totalEth = currentView
+    const totalEth = data
       .slice()
       .reduce((acc, item) => acc.plus(item.feeEth), BigNumber(0))
       .dividedBy(WEI_DECIMALS); // convert wei to ETH
 
-    const totalUsdt = currentView
+    const totalUsdt = data
       .slice()
       .reduce((acc, item) => acc + parseFloat(item.feeUsdt), 0);
 
@@ -62,26 +58,41 @@ const Main: React.FC = () => {
   };
 
   useEffect(() => {
-    getTransactions().then((data) => {
+    getTransactions({ hash: inputValue, page: 0, limit: 50 }).then((data) => {
       setData(data);
       setTotalFeesForCurrentPage(data);
       setLoading(false);
     });
   }, []);
 
+  // handle pagiantion, load data
   useEffect(() => {
-    if (!reportId) return;
-
     const { current, pageSize } = tableParams;
-    if (current! * pageSize! < data.length) return;
 
-    getReport(reportId, reportDataPage + 1, REPORT_TX_TO_FETCH).then(
-      (tx: ReportDataDto) => {
-        const formattedData = formatData(tx.data);
-        setData((prev) => [...prev, ...formattedData]);
-        setReportDataPage((prev) => prev + 1);
-      }
-    );
+    if (reportId) {
+      if (current! * pageSize! < data.length) return;
+
+      setLoading(true);
+      getReport(reportId, reportDataPage + 1, REPORT_TX_TO_FETCH).then(
+        (tx: ReportDataDto) => {
+          const formattedData = formatData(tx.data);
+          setData((prev) => [...prev, ...formattedData]);
+          setReportDataPage((prev) => prev + 1);
+          setLoading(false);
+        }
+      );
+    } else {
+      setLoading(true);
+      getTransactions({
+        hash: inputValue,
+        page: current! - 1,
+        limit: pageSize!,
+      }).then((data) => {
+        setData(data);
+        setTotalFeesForCurrentPage(data);
+        setLoading(false);
+      });
+    }
   }, [tableParams, reportId]);
 
   const onTableChange = (
@@ -155,12 +166,16 @@ const Main: React.FC = () => {
     } else {
       // When there's no time range, summary data is based on current page of table
 
-      const data = await getTransactions(inputValue);
+      const data = await getTransactions({
+        hash: inputValue,
+        page: 0,
+        limit: 50,
+      });
       setData(data);
       setTotalFeesForCurrentPage(data);
       setTableParams({
         ...tableParams,
-        total: data.length,
+        current: 1,
       });
       setReportId("");
       setReportDataPage(0);
