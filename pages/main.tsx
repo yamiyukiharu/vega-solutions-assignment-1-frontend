@@ -17,7 +17,7 @@ import type { RangePickerProps } from "antd/lib/date-picker";
 const Main: React.FC = () => {
   const { data: ethPrice } = useExchangeRate();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [reportId, setReportId] = useState("");
   const [reportDataPage, setReportDataPage] = useState<number>(0);
   const [startTime, setStartTime] = useState<string>("");
@@ -65,6 +65,7 @@ const Main: React.FC = () => {
     getTransactions().then((data) => {
       setData(data);
       setTotalFeesForCurrentPage(data);
+      setLoading(false);
     });
   }, []);
 
@@ -125,7 +126,7 @@ const Main: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         status = await getReportStatus(location);
       }
-      
+
       // Fetch report data
       const reportId = location.split("/").pop();
       const data: ReportDataDto = await getReport(
