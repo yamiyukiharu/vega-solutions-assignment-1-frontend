@@ -3,6 +3,11 @@ Vega Solutions Engineering Challenge 1
 
 This is the code repo for the frontend application. It is built with Typescript and NextJS framework. 
 
+## User Interface Notes
+Total Fees is :
+- the total of the visible list of transactions when no time range is selected
+- the total of the selected time range 
+
 # Getting Started
 
 ## Prerequisites
